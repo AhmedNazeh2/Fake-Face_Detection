@@ -9,15 +9,21 @@ import tensorflow as tf
 from keras.models import load_model
 from keras.utils import img_to_array
 import io
-
+from fastapi.middleware.cors import CORSMiddleware
 # ================= Load Model =================
 MODEL_PATH = "real_vs_fake_model.h5"
 model = load_model(MODEL_PATH)
-LAST_CONV_LAYER = "conv5_block16_2_conv"  # تأكد إنه مظبوط
+LAST_CONV_LAYER = "conv5_block16_2_conv" 
 
 # ================= FastAPI =================
 app = FastAPI(title="Real vs Fake Face Detection API")
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # ================= Prediction Function =================
 def predict_with_confidence(model, img_array):
     pred = model.predict(img_array, verbose=0)[0][0]
@@ -61,7 +67,6 @@ def apply_gradcam_refined(img_array, heatmap, alpha=0.5, intensity_threshold=0.7
         if w > 15 and h > 15:
             cv2.rectangle(boxed_img, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
-    # ضع النص أعلى الصورة
     text = f"{label_text} | {confidence:.2f}%"
     cv2.putText(boxed_img, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 
                 1, (0, 255, 0), 2, cv2.LINE_AA)
@@ -94,7 +99,6 @@ async def predict(file: UploadFile = File(...)):
     heatmap = make_gradcam_heatmap(img_array, model, LAST_CONV_LAYER)
     superimposed_img, boxed_img = apply_gradcam_refined(img, heatmap, label_text=label, confidence=confidence)
 
-    # Return image مع النص
     buffered = image_to_bytes(boxed_img)
     return StreamingResponse(buffered, media_type="image/jpeg", headers={
         "X-Prediction": label,
